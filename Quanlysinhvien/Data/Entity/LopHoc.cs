@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Quanlysinhvien;
+namespace Quanlysinhvien.Data.Entity;
 
 public class LopHoc
 {
@@ -26,3 +26,4 @@ public class LopHoc
         return hopLe;
     }
 }
+

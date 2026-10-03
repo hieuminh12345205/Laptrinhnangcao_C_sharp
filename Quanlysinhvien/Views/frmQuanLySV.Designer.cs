@@ -1,6 +1,6 @@
-namespace Quanlysinhvien
+namespace Quanlysinhvien.Views
 {
-    partial class Form1
+    partial class frmQuanLySV
     {
         /// <summary>
         ///  Required designer variable.
@@ -417,7 +417,7 @@ namespace Quanlysinhvien
             dgvSinhVien.AllowUserToDeleteRows = false;
             dgvSinhVien.RowHeadersVisible = false;
             // 
-            // Form1
+            // frmQuanLySV
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
@@ -456,8 +456,8 @@ namespace Quanlysinhvien
             Controls.Add(label3);
             Controls.Add(label2);
             Controls.Add(label1);
-            Name = "Form1";
-            Load += Form1_Load;
+            Name = "frmQuanLySV";
+            Load += frmQuanLySV_Load;
             ((System.ComponentModel.ISupportInitialize)nudDiem).EndInit();
             ((System.ComponentModel.ISupportInitialize)nudDiemTu).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvSinhVien).EndInit();
@@ -517,4 +517,5 @@ namespace Quanlysinhvien
         private DataGridViewTextBoxColumn colTrangThai;
     }
 }
+
 

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Quanlysinhvien;
+namespace Quanlysinhvien.Data.Entity;
 
 public class SinhVien : IValidatableObject
 {
@@ -61,3 +61,4 @@ public class SinhVien : IValidatableObject
         return hopLe;
     }
 }
+
