@@ -1,0 +1,6 @@
+# File do Visual Studio và quá trình build tạo ra
+.vs/
+bin/
+obj/
+*.user
+*.suo
