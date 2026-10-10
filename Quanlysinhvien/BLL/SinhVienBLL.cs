@@ -1,5 +1,7 @@
 using Quanlysinhvien.Data.DAL;
 using Quanlysinhvien.Data.Entity;
+using System.ComponentModel.DataAnnotations;
+using System.Text.RegularExpressions;
 
 namespace Quanlysinhvien.BLL;
 
@@ -24,31 +26,35 @@ public class SinhVienBLL
     public List<SinhVien> LayDanhSach() => dal.LayDanhSach();
     public SinhVien? TimTheoMa(string maSV) => dal.TimTheoMa(maSV.Trim());
 
-    public bool KiemTra(SinhVien sv, out string loi)
+    public List<ValidationResult> LayLoiValidation(SinhVien sv)
     {
         // Chuẩn hóa trước khi dùng Data Annotations kiểm tra đối tượng.
         sv.MaSV = sv.MaSV.Trim();
-        sv.HoTen = sv.HoTen.Trim();
+        sv.HoTen = Regex.Replace(sv.HoTen.Trim(), @"\s+", " ");
         sv.Email = sv.Email.Trim();
         sv.SDT = sv.SDT.Trim();
         // Kiểm tra khoảng trước khi làm tròn, tránh biến 10.04 thành 10.0.
-        if (sv.Diem < 0 || sv.Diem > 10)
-        {
-            loi = "Điểm phải từ 0 đến 10.";
-            return false;
-        }
-        sv.Diem = Math.Round(sv.Diem, 1, MidpointRounding.AwayFromZero);
-        if (!sv.KiemTraHopLe(out loi)) return false;
+        if (sv.Diem >= 0 && sv.Diem <= 10)
+            sv.Diem = Math.Round(sv.Diem, 1, MidpointRounding.AwayFromZero);
+        var ketQua = sv.LayLoiValidation();
 
         // Chỉ nhận lớp có trong danh sách; dùng cùng đối tượng để giữ quan hệ 1-n.
-        LopHoc? lop = lopHocBLL.TimTheoMa(sv.LopHoc!.MaLop);
-        if (lop == null)
+        if (sv.LopHoc != null)
         {
-            loi = "Lớp học không tồn tại.";
-            return false;
+            LopHoc? lop = lopHocBLL.TimTheoMa(sv.LopHoc.MaLop);
+            if (lop == null)
+                ketQua.Add(new ValidationResult("Lớp học không tồn tại.", new[] { nameof(SinhVien.LopHoc) }));
+            else
+                sv.LopHoc = lop;
         }
-        sv.LopHoc = lop;
-        return true;
+        return ketQua;
+    }
+
+    public bool KiemTra(SinhVien sv, out string loi)
+    {
+        var ketQua = LayLoiValidation(sv);
+        loi = string.Join(Environment.NewLine, ketQua.Select(x => x.ErrorMessage));
+        return ketQua.Count == 0;
     }
 
     public bool Them(SinhVien sv, out string loi)

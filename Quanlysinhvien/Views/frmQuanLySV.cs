@@ -9,6 +9,7 @@ public partial class frmQuanLySV : Form
     private readonly LopHocBLL lopHocBLL = new();
     private readonly SinhVienBLL sinhVienBLL;
     private bool dangHienThi; // Tránh TextChanged chạy khi code điền thông tin.
+    private bool daTaiDuLieu;
 
     public frmQuanLySV()
     {
@@ -16,6 +17,27 @@ public partial class frmQuanLySV : Form
         InitializeComponent();
         // Load đã nối trong Designer; các sự kiện còn lại nối tại đây.
         txtMaSV.TextChanged += TxtMaSV_TextChanged;
+        txtMaSV.Enter += (_, _) => txtMaSV.SelectAll();
+        txtMaSV.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            txtHoTen.Focus();
+            e.SuppressKeyPress = true;
+        };
+        // Xóa biểu tượng lỗi của ô đang được người dùng chỉnh lại.
+        txtHoTen.TextChanged += (_, _) => errorProvider.SetError(txtHoTen, "");
+        txtEmail.TextChanged += (_, _) => errorProvider.SetError(txtEmail, "");
+        txtSDT.TextChanged += (_, _) => errorProvider.SetError(txtSDT, "");
+        dtpNgaySinh.ValueChanged += (_, _) => errorProvider.SetError(dtpNgaySinh, "");
+        rdoNam.CheckedChanged += (_, _) => errorProvider.SetError(rdoNu, "");
+        rdoNu.CheckedChanged += (_, _) => errorProvider.SetError(rdoNu, "");
+        cboLop.SelectedIndexChanged += (_, _) => errorProvider.SetError(cboLop, "");
+        cboTrangThai.SelectedIndexChanged += (_, _) => errorProvider.SetError(cboTrangThai, "");
+        nudDiem.ValueChanged += (_, _) => errorProvider.SetError(nudDiem, "");
+        cboLocLop.SelectedValueChanged += (_, _) =>
+        {
+            if (daTaiDuLieu) HienThiDanhSach();
+        };
         btnThem.Click += BtnThem_Click;
         btnSua.Click += BtnSua_Click;
         btnXoa.Click += BtnXoa_Click;
@@ -59,6 +81,7 @@ public partial class frmQuanLySV : Form
         cboLocLop.DataSource = danhSachLoc;
         cboLocLop.SelectedIndex = 0;
 
+        daTaiDuLieu = true;
         HienThiDanhSach();
         LamMoi();
         // Đợi form hiện ra rồi đặt con trỏ vào mã sinh viên.
@@ -73,6 +96,7 @@ public partial class frmQuanLySV : Form
     private void TxtMaSV_TextChanged(object? sender, EventArgs e)
     {
         if (dangHienThi) return;
+        errorProvider.Clear();
         SinhVien? sv = TimSinhVien();
         if (sv != null) DienThongTin(sv);
         else XoaThongTin(); // Giữ mã vừa nhập, xóa các ô còn lại.
@@ -103,6 +127,7 @@ public partial class frmQuanLySV : Form
 
     private void LamMoi()
     {
+        errorProvider.Clear();
         dangHienThi = true;
         txtMaSV.Clear();
         XoaThongTin();
@@ -114,6 +139,7 @@ public partial class frmQuanLySV : Form
 
     private void DienThongTin(SinhVien sv)
     {
+        errorProvider.Clear();
         dangHienThi = true;
         txtMaSV.Text = sv.MaSV;
         txtHoTen.Text = sv.HoTen;
@@ -147,21 +173,49 @@ public partial class frmQuanLySV : Form
 
     private bool KiemTra(SinhVien sv)
     {
-        if (sinhVienBLL.KiemTra(sv, out string loi)) return true;
-        MessageBox.Show(loi, "Dữ liệu chưa hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        return false;
+        errorProvider.Clear();
+        var loi = sinhVienBLL.LayLoiValidation(sv);
+        Control? oDauTien = null;
+        foreach (var ketQua in loi)
+        {
+            foreach (string tenThuocTinh in ketQua.MemberNames)
+            {
+                Control? oNhap = tenThuocTinh switch
+                {
+                    nameof(SinhVien.MaSV) => txtMaSV,
+                    nameof(SinhVien.HoTen) => txtHoTen,
+                    nameof(SinhVien.Email) => txtEmail,
+                    nameof(SinhVien.SDT) => txtSDT,
+                    nameof(SinhVien.NgaySinh) => dtpNgaySinh,
+                    nameof(SinhVien.GioiTinh) => rdoNu,
+                    nameof(SinhVien.LopHoc) => cboLop,
+                    nameof(SinhVien.Diem) => nudDiem,
+                    nameof(SinhVien.TrangThai) => cboTrangThai,
+                    _ => null
+                };
+                if (oNhap == null) continue;
+                string loiCu = errorProvider.GetError(oNhap);
+                errorProvider.SetError(oNhap, loiCu == "" ? ketQua.ErrorMessage
+                    : loiCu + Environment.NewLine + ketQua.ErrorMessage);
+                oDauTien ??= oNhap;
+            }
+        }
+        // Đặt con trỏ vào ô sai đầu tiên, không đổi tiêu điểm liên tục trong vòng lặp.
+        oDauTien?.Focus();
+        return loi.Count == 0;
     }
 
     private void BtnThem_Click(object? sender, EventArgs e)
     {
         SinhVien sv = DocThongTin();
+        if (!KiemTra(sv)) return;
         if (!sinhVienBLL.Them(sv, out string loi))
         {
             MessageBox.Show(loi, "Không thể thêm", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         HienThiDanhSach();
-        CapNhatNut(true);
+        DienThongTin(sv); // Hiển thị lại họ tên và điểm sau khi BLL chuẩn hóa.
         MessageBox.Show("Đã thêm sinh viên.");
     }
 
@@ -178,11 +232,13 @@ public partial class frmQuanLySV : Form
             return;
         }
         HienThiDanhSach();
+        DienThongTin(moi);
         MessageBox.Show("Đã sửa sinh viên.");
     }
 
     private void BtnXoa_Click(object? sender, EventArgs e)
     {
+        errorProvider.Clear();
         SinhVien? sv = TimSinhVien();
         if (sv == null) return;
         if (!XacNhan($"Bạn có chắc muốn xóa sinh viên {sv.MaSV} - {sv.HoTen}?")) return;

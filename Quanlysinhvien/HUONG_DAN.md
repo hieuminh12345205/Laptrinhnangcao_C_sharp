@@ -53,6 +53,28 @@ Hiện chưa có form riêng để bấm thêm/sửa/xóa lớp; các chức nă
 7. Làm mới xóa thông tin nhập, bật Thêm, tắt Sửa/Xóa và đưa con trỏ về mã sinh viên.
 8. Tìm kiếm lọc đồng thời theo từ khóa, lớp và điểm tối thiểu. Hiển thị tất cả xóa bộ lọc.
 
+## Bổ sung ngày 10.10.2026
+
+- Khi Thêm/Sửa có dữ liệu sai, ErrorProvider hiển thị lỗi cạnh từng ô. Rê chuột vào biểu tượng để đọc lỗi.
+- Con trỏ chuyển đến ô sai đầu tiên. Chỉnh lại ô sẽ xóa biểu tượng lỗi của ô đó; Làm mới xóa tất cả lỗi.
+- Validation trả đầy đủ lỗi thuộc tính và ngày sinh trong cùng lần kiểm tra.
+- BLL chuẩn hóa họ tên bằng cách gộp nhiều khoảng trắng thành một khoảng trắng.
+- Chọn lớp ở thanh tìm kiếm sẽ tự cập nhật bảng theo từ khóa, mã lớp và điểm tối thiểu hiện tại.
+- Vào ô mã sinh viên sẽ chọn toàn bộ mã; Enter chuyển sang họ tên theo thứ tự Tab của hàng đầu tiên.
+
+## Đối chiếu sáu yêu cầu bài tập
+
+1. Giao diện: có các ô thông tin, giới tính, lớp, điểm, trạng thái, nút chức năng, thanh tìm kiếm và bảng.
+2. LopHoc/SinhVien: quan hệ 1-n, Data Annotations và KiemTraHopLe; SinhVien có LayLoiValidation để báo lỗi theo ô.
+3. FormLoad: Tab theo từng hàng từ trái sang phải rồi xuống hàng, tiêu điểm ở txtMaSV, nạp lớp/bảng và thiết lập nút.
+4. Mã tồn tại: tự điền thông tin, tắt Thêm, bật Sửa/Xóa. Mã mới: giữ mã, xóa thông tin khác, bật Thêm, tắt Sửa/Xóa.
+5. Làm mới: xóa thông tin và lỗi, bỏ chọn ngày sinh/giới tính/lớp/trạng thái, điểm về 0, tiêu điểm ở txtMaSV.
+6. Sửa, Xóa và Đóng: hỏi Yes/No, mặc định No. Xóa lớp đang có sinh viên bị BLL từ chối.
+
+Kiểm tra tự động ngày 10.10.2026: 61 kiểm tra dữ liệu, quan hệ lớp-sinh viên, CRUD qua BLL/DAL/DAO,
+validation, ErrorProvider, thứ tự Tab, trạng thái nút, làm mới và lọc đã qua. Build không lỗi/cảnh báo.
+Hộp thoại Yes/No được rà soát trong code; để thử thủ công, chọn Sửa/Xóa/Đóng rồi chọn No và kiểm tra dữ liệu giữ nguyên.
+
 ## Quy tắc dữ liệu
 
 - Mã và họ tên bắt buộc, có giới hạn độ dài.

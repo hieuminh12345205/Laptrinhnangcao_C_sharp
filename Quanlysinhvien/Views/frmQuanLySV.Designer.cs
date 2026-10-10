@@ -28,6 +28,10 @@ namespace Quanlysinhvien.Views
         /// </summary>
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
+            errorProvider = new ErrorProvider(components);
+            errorProvider.ContainerControl = this;
+            errorProvider.BlinkStyle = ErrorBlinkStyle.NeverBlink;
             label1 = new Label();
             label2 = new Label();
             label3 = new Label();
@@ -515,6 +519,7 @@ namespace Quanlysinhvien.Views
         private DataGridViewTextBoxColumn colLop;
         private DataGridViewTextBoxColumn colDiem;
         private DataGridViewTextBoxColumn colTrangThai;
+        private ErrorProvider errorProvider;
     }
 }
 

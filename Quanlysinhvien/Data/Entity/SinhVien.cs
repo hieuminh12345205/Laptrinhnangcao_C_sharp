@@ -51,14 +51,24 @@ public class SinhVien : IValidatableObject
             yield return new ValidationResult(loi, new[] { nameof(LopHoc) });
     }
 
+    public List<ValidationResult> LayLoiValidation()
+    {
+        // Kiểm tra từng thuộc tính để lấy đầy đủ lỗi, kể cả ngày sinh khi ô khác sai.
+        var ketQua = new List<ValidationResult>();
+        foreach (var thuocTinh in GetType().GetProperties())
+        {
+            var context = new ValidationContext(this) { MemberName = thuocTinh.Name };
+            Validator.TryValidateProperty(thuocTinh.GetValue(this), context, ketQua);
+        }
+        ketQua.AddRange(Validate(new ValidationContext(this)));
+        return ketQua;
+    }
+
     public bool KiemTraHopLe(out string loi)
     {
-        // validateAllProperties = true: kiểm tra mọi Data Annotation.
-        // Validator cũng gọi Validate để kiểm tra ngày sinh và số lẻ của điểm.
-        var ketQua = new List<ValidationResult>();
-        bool hopLe = Validator.TryValidateObject(this, new ValidationContext(this), ketQua, true);
+        var ketQua = LayLoiValidation();
         loi = string.Join(Environment.NewLine, ketQua.Select(x => x.ErrorMessage));
-        return hopLe;
+        return ketQua.Count == 0;
     }
 }
 
