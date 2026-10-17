@@ -367,3 +367,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Công cụ kiểm tra MySQL dùng riêng trên máy
+/KiemTraMySql/
