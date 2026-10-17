@@ -3,7 +3,7 @@
 Ngày làm: **03.10.2026**.
 
 Thiết kế form quản lý sinh viên, quan hệ lớp học - sinh viên, validation bằng Data Annotations,
-thêm/sửa/xóa, làm mới và tìm kiếm. Dữ liệu lưu trong bộ nhớ.
+thêm/sửa/xóa, làm mới và tìm kiếm. Dữ liệu lưu trong MySQL, còn nguyên sau khi đóng ứng dụng.
 
 Mở `Quanlysinhvien.slnx` trong Visual Studio và nhấn F5 để chạy.
 Xem `HUONG_DAN.md` để biết cách sử dụng.
@@ -36,12 +36,29 @@ Quanlysinhvien/
 - Views: giao diện, đọc dữ liệu nhập và hiển thị thông báo.
 - BLL: xử lý nghiệp vụ, kiểm tra dữ liệu, làm tròn điểm và tìm kiếm.
 - DAL: cung cấp các hàm truy cập dữ liệu cho BLL, gọi DAO để thực hiện.
-- DAO: trực tiếp giữ danh sách và thêm/sửa/xóa dữ liệu trong bộ nhớ.
+- DAO: dùng DataHelper chạy SQL có tham số, đọc/ghi MySQL.
 - Entity: các lớp mô tả dữ liệu, quan hệ lớp học - sinh viên và Data Annotations.
 
 Luồng xử lý của bài: **Views → BLL → DAL → DAO**.
 
 Phần lớp học có đầy đủ lấy danh sách, tìm theo mã, thêm, sửa tên và xóa.
 LopHocBLL kiểm tra Data Annotations, từ chối mã lớp trùng và không cho xóa lớp đang có sinh viên.
-ComboBox lấy danh sách từ LopHocBLL. Phần lớp và sinh viên dùng chung đối tượng lớp để giữ quan hệ 1-n.
+ComboBox lấy danh sách từ LopHocBLL. Khóa ngoại MaLop trong MySQL giữ quan hệ 1-n.
 Các hàm thêm/sửa/xóa lớp hiện dùng từ code; giao diện hiện tại phục vụ quản lý sinh viên.
+
+## MySQL và chống SQL injection — 17.10.2026
+
+1. Điền mysql.local.json theo mysql.example.json; file mật khẩu được Git bỏ qua.
+2. Khi cài trên máy khác, chạy Data/Sql/lophoc.sql, sinhvien.sql, rồi dulieumau.sql.
+3. Chạy form: nút Thêm/Sửa/Xóa gọi AddSinhVien/UpdateSinhVien/DeleteSinhVien qua BLL → DAL → DAO.
+
+Mọi dữ liệu nhập được truyền bằng MySqlParameter có kiểu dữ liệu. Không ghép mã sinh viên,
+họ tên, mã lớp hoặc từ khóa vào chuỗi SQL. Các câu UPDATE/DELETE có WHERE theo khóa chính.
+Kiểm tra Data Annotations ở BLL và ràng buộc khóa chính/khóa ngoại ở database cùng bảo vệ dữ liệu.
+Đã chạy 34 kiểm tra tích hợp MySQL, gồm dữ liệu Unicode, dấu nháy, payload SQLi, CRUD và các luồng form.
+
+Yêu cầu cuối về ngoại lệ: các hàm ghi BLL trả void khi thành công, ném ValidationException khi
+vi phạm nghiệp vụ; lỗi kỹ thuật từ DAO/DAL tự truyền qua BLL. View bắt ValidationException
+và Exception để hiển thị thông báo; không đưa mật khẩu/câu SQL vào thông báo lỗi kỹ thuật.
+Đã cập nhật cách gọi trên form, giữ xác nhận Sửa/Xóa và kiểm tra chưa thay đổi thông tin.
+Bộ kiểm tra mới nhất: 59 kiểm tra MySQL/SQLi đã qua; build 0 lỗi, 0 cảnh báo.

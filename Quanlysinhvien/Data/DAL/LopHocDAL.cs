@@ -14,7 +14,9 @@ public class LopHocDAL
         return dao.LayDanhSach();
     }
     public LopHoc? TimTheoMa(string maLop) => dao.TimTheoMa(maLop.Trim());
-    public void Them(LopHoc lop) => dao.Them(lop);
-    public void Sua(LopHoc cu, LopHoc moi) => dao.Sua(cu, moi);
-    public void Xoa(LopHoc lop) => dao.Xoa(lop);
+    public bool CoSinhVien(string maLop) => dao.CoSinhVien(maLop.Trim());
+    // Không catch tại DAL: giữ nguyên ngoại lệ từ DAO để truyền lên BLL/View.
+    public int Them(LopHoc lop) => dao.Them(lop);
+    public int Sua(LopHoc cu, LopHoc moi) => dao.Sua(cu, moi);
+    public int Xoa(LopHoc lop) => dao.Xoa(lop);
 }

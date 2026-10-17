@@ -20,4 +20,14 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MySql.Data" Version="26.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="mysql.example.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="mysql.local.json" CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
 </Project>

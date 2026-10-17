@@ -21,6 +21,7 @@ public class SinhVien : IValidatableObject
 
     [Required(ErrorMessage = "Email không được để trống.")]
     [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
+    [StringLength(254, ErrorMessage = "Email tối đa 254 ký tự.")]
     public string Email { get; set; } = "";
 
     [Required(ErrorMessage = "Số điện thoại không được để trống.")]

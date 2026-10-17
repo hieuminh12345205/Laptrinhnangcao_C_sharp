@@ -4,6 +4,12 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # User-specific files
+# Local credentials: keep only example configuration in Git
+.env
+.env.*
+!.env.example
+mysql.local.json
+appsettings.*.local.json
 *.rsuser
 *.suo
 *.user

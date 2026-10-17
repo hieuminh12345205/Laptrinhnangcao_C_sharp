@@ -1,9 +1,10 @@
 using Quanlysinhvien.Data.DAL;
 using Quanlysinhvien.Data.Entity;
+using System.ComponentModel.DataAnnotations;
 
 namespace Quanlysinhvien.BLL;
 
-// BLL kiểm tra dữ liệu lớp và quy tắc nghiệp vụ trước khi gọi DAL.
+// BLL ném lỗi nghiệp vụ; không bắt lỗi MySQL/cấu hình để View xử lý.
 public class LopHocBLL
 {
     private readonly LopHocDAL dal = new();
@@ -13,52 +14,40 @@ public class LopHocBLL
 
     public bool KiemTra(LopHoc lop, out string loi)
     {
-        lop.MaLop = lop.MaLop.Trim();
-        lop.TenLop = lop.TenLop.Trim();
+        lop.MaLop = (lop.MaLop ?? "").Trim();
+        lop.TenLop = (lop.TenLop ?? "").Trim();
         return lop.KiemTraHopLe(out loi);
     }
 
-    public bool Them(LopHoc lop, out string loi)
+    public void Them(LopHoc lop)
     {
-        if (!KiemTra(lop, out loi)) return false;
+        if (!KiemTra(lop, out string loi)) throw new ValidationException(loi);
         if (TimTheoMa(lop.MaLop) != null)
-        {
-            loi = "Mã lớp đã tồn tại.";
-            return false;
-        }
-        dal.Them(lop);
-        return true;
+            throw new ValidationException("Mã lớp đã tồn tại.");
+        if (dal.Them(lop) != 1)
+            throw new ValidationException("Không thêm được lớp học.");
     }
 
-    public bool Sua(LopHoc lop, out string loi)
+    public void Sua(LopHoc lop)
     {
-        if (!KiemTra(lop, out loi)) return false;
+        if (!KiemTra(lop, out string loi)) throw new ValidationException(loi);
         LopHoc? cu = TimTheoMa(lop.MaLop);
         if (cu == null)
-        {
-            loi = "Không tìm thấy lớp cần sửa.";
-            return false;
-        }
+            throw new ValidationException("Không tìm thấy lớp cần sửa.");
         // Mã lớp dùng để tìm; thao tác sửa chỉ thay đổi tên lớp.
-        dal.Sua(cu, lop);
-        return true;
+        if (dal.Sua(cu, lop) != 1)
+            throw new ValidationException("Không tìm thấy lớp cần sửa. Dữ liệu có thể vừa bị xóa.");
     }
 
-    public bool Xoa(string maLop, out string loi)
+    public void Xoa(string maLop)
     {
         LopHoc? lop = TimTheoMa(maLop);
         if (lop == null)
-        {
-            loi = "Không tìm thấy lớp cần xóa.";
-            return false;
-        }
-        if (lop.SinhViens.Count > 0)
-        {
-            loi = "Không thể xóa lớp đang có sinh viên. Hãy chuyển hoặc xóa các sinh viên trước.";
-            return false;
-        }
-        dal.Xoa(lop);
-        loi = "";
-        return true;
+            throw new ValidationException("Không tìm thấy lớp cần xóa.");
+        if (dal.CoSinhVien(lop.MaLop))
+            throw new ValidationException("Không thể xóa lớp đang có sinh viên. Hãy chuyển hoặc xóa các sinh viên trước.");
+        // Khóa ngoại MySQL chặn trường hợp có sinh viên được thêm đồng thời.
+        if (dal.Xoa(lop) != 1)
+            throw new ValidationException("Không tìm thấy lớp cần xóa. Dữ liệu có thể vừa bị xóa.");
     }
 }

@@ -1,55 +1,152 @@
+using System.Data;
+using MySql.Data.MySqlClient;
 using Quanlysinhvien.Data.Entity;
 
 namespace Quanlysinhvien.Data.DAO;
 
-// DAO trực tiếp giữ danh sách và thực hiện các thao tác với dữ liệu.
-// Hiện dùng bộ nhớ; sau này có thể thay bằng đọc file hoặc cơ sở dữ liệu.
+// DAO chỉ chạy SQL và chuyển dữ liệu MySQL thành đối tượng C#.
 public class SinhVienDAO
 {
-    private readonly List<SinhVien> danhSachSV = new();
+    // Chỉ đọc cấu hình khi truy cập dữ liệu, không kết nối trong constructor của form.
+    private DataHelper Helper => new DataHelper();
 
-    public SinhVienDAO(LopHoc lopMau)
+    private const string SelectSinhVien = @"
+        SELECT sv.MaSV, sv.HoTen, sv.NgaySinh, sv.GioiTinh, sv.Email,
+               sv.SDT, sv.MaLop, sv.Diem, sv.TrangThai, lh.TenLop
+        FROM sinhvien sv INNER JOIN lophoc lh ON sv.MaLop = lh.MaLop";
+
+    public List<SinhVien> LayDanhSach()
     {
-        // Nạp dữ liệu mẫu một lần khi tạo DAO.
-        // Nhận lớp từ phần lớp học, không tạo một danh sách lớp riêng.
-        Them(new SinhVien
-        {
-            MaSV = "SV001", HoTen = "Nguyễn Văn An", NgaySinh = new DateTime(2005, 5, 12),
-            GioiTinh = "Nam", Email = "an@example.com", SDT = "0912345678",
-            LopHoc = lopMau, Diem = 8.5m, TrangThai = "Đang học"
-        });
+        using var reader = Helper.ExecuteReader(SelectSinhVien + " ORDER BY sv.MaSV");
+        return DocDanhSach(reader);
     }
 
-    // Trả danh sách mới để bên ngoài không thêm/xóa trực tiếp vào danh sách gốc.
-    // Các đối tượng bên trong vẫn dùng chung để duy trì quan hệ lớp - sinh viên.
-    public List<SinhVien> LayDanhSach() => danhSachSV.ToList();
+    // Phi kết nối: tải kết quả vào DataTable rồi mới duyệt bằng foreach.
+    // Tương ứng GetAllSinhVien trong code tham khảo của cô.
+    public List<SinhVien> LayDanhSachPhiKetNoi()
+    {
+        DataTable bang = Helper.ExecuteQuery(SelectSinhVien + " ORDER BY sv.MaSV");
+        var ketQua = new List<SinhVien>();
+        var cacLop = new Dictionary<string, LopHoc>(StringComparer.OrdinalIgnoreCase);
+        foreach (DataRow dong in bang.Rows)
+        {
+            string maLop = (string)dong["MaLop"];
+            if (!cacLop.TryGetValue(maLop, out LopHoc? lop))
+            {
+                lop = new LopHoc { MaLop = maLop, TenLop = (string)dong["TenLop"] };
+                cacLop.Add(maLop, lop);
+            }
+            var sv = new SinhVien
+            {
+                MaSV = (string)dong["MaSV"], HoTen = (string)dong["HoTen"],
+                NgaySinh = Convert.ToDateTime(dong["NgaySinh"]), GioiTinh = (string)dong["GioiTinh"],
+                Email = (string)dong["Email"], SDT = (string)dong["SDT"], LopHoc = lop,
+                Diem = Convert.ToDecimal(dong["Diem"]), TrangThai = (string)dong["TrangThai"]
+            };
+            ketQua.Add(sv);
+            lop.SinhViens.Add(sv);
+        }
+        return ketQua;
+    }
+
+    // Tương ứng GetSinhViensByMaLop; truyền mã lớp riêng để chống SQLi.
+    public List<SinhVien> LayTheoMaLop(string maLop)
+    {
+        using var reader = Helper.ExecuteReader(SelectSinhVien + " WHERE sv.MaLop = @MaLop ORDER BY sv.MaSV",
+            new MySqlParameter("@MaLop", MySqlDbType.VarChar) { Value = maLop });
+        return DocDanhSach(reader);
+    }
 
     public SinhVien? TimTheoMa(string maSV)
     {
-        return danhSachSV.Find(sv => sv.MaSV.Equals(maSV, StringComparison.OrdinalIgnoreCase));
+        // Tuyệt đối không ghép maSV vào SQL, kể cả trong điều kiện WHERE.
+        using var reader = Helper.ExecuteReader(SelectSinhVien + " WHERE sv.MaSV = @MaSV",
+            new MySqlParameter("@MaSV", MySqlDbType.VarChar) { Value = maSV });
+        return DocDanhSach(reader).FirstOrDefault();
     }
 
-    public void Them(SinhVien sv)
+    public List<SinhVien> TimKiem(string tuKhoa, string maLop, decimal diemTu)
     {
-        // Thêm vào danh sách chung và danh sách sinh viên của lớp.
-        danhSachSV.Add(sv);
-        sv.LopHoc!.SinhViens.Add(sv);
+        // LOCATE tìm chuỗi nguyên văn: dấu %, _ hay dấu nháy không thành mã SQL.
+        const string dieuKien = @"
+            WHERE (@TuKhoa = '' OR LOCATE(@TuKhoa, sv.MaSV) > 0
+                OR LOCATE(@TuKhoa, sv.HoTen) > 0 OR LOCATE(@TuKhoa, sv.Email) > 0
+                OR LOCATE(@TuKhoa, sv.SDT) > 0)
+              AND (@MaLop = '' OR sv.MaLop = @MaLop) AND sv.Diem >= @DiemTu
+            ORDER BY sv.MaSV";
+        using var reader = Helper.ExecuteReader(SelectSinhVien + dieuKien,
+            new MySqlParameter("@TuKhoa", MySqlDbType.VarChar) { Value = tuKhoa },
+            new MySqlParameter("@MaLop", MySqlDbType.VarChar) { Value = maLop },
+            new MySqlParameter("@DiemTu", MySqlDbType.Decimal) { Value = diemTu });
+        return DocDanhSach(reader);
     }
 
-    public void Sua(SinhVien cu, SinhVien moi)
+    public int AddSinhVien(SinhVien sv)
     {
-        // Khi đổi lớp, xóa sinh viên khỏi lớp cũ rồi đưa vào lớp mới.
-        int viTri = danhSachSV.IndexOf(cu);
-        cu.LopHoc!.SinhViens.Remove(cu);
-        danhSachSV[viTri] = moi;
-        moi.LopHoc!.SinhViens.Add(moi);
+        const string sql = @"
+            INSERT INTO sinhvien (MaSV, HoTen, NgaySinh, GioiTinh, Email, SDT, MaLop, Diem, TrangThai)
+            VALUES (@MaSV, @HoTen, @NgaySinh, @GioiTinh, @Email, @SDT, @MaLop, @Diem, @TrangThai)";
+        return Helper.ExecuteNonQuery(sql, TaoThamSo(sv));
     }
 
-    public void Xoa(SinhVien sv)
+    public int UpdateSinhVien(SinhVien sv)
     {
-        // Xóa ở cả hai danh sách để không còn tham chiếu sinh viên trong lớp.
-        danhSachSV.Remove(sv);
-        sv.LopHoc!.SinhViens.Remove(sv);
+        // Mã SV xác định đúng bản ghi cần sửa, không thay đổi khóa chính.
+        const string sql = @"
+            UPDATE sinhvien SET HoTen = @HoTen, NgaySinh = @NgaySinh, GioiTinh = @GioiTinh,
+                Email = @Email, SDT = @SDT, MaLop = @MaLop, Diem = @Diem, TrangThai = @TrangThai
+            WHERE MaSV = @MaSV";
+        return Helper.ExecuteNonQuery(sql, TaoThamSo(sv));
+    }
+
+    public int DeleteSinhVien(string maSV)
+    {
+        const string sql = "DELETE FROM sinhvien WHERE MaSV = @MaSV";
+        return Helper.ExecuteNonQuery(sql,
+            new MySqlParameter("@MaSV", MySqlDbType.VarChar) { Value = maSV });
+    }
+
+    private static MySqlParameter[] TaoThamSo(SinhVien sv)
+    {
+        // Kiểu dữ liệu được chỉ rõ; giá trị luôn truyền riêng với câu SQL.
+        return new MySqlParameter[]
+        {
+            new("@MaSV", MySqlDbType.VarChar) { Value = sv.MaSV },
+            new("@HoTen", MySqlDbType.VarChar) { Value = sv.HoTen },
+            new("@NgaySinh", MySqlDbType.Date) { Value = sv.NgaySinh.Date },
+            new("@GioiTinh", MySqlDbType.VarChar) { Value = sv.GioiTinh },
+            new("@Email", MySqlDbType.VarChar) { Value = sv.Email },
+            new("@SDT", MySqlDbType.VarChar) { Value = sv.SDT },
+            new("@MaLop", MySqlDbType.VarChar) { Value = sv.LopHoc!.MaLop },
+            new("@Diem", MySqlDbType.Decimal) { Value = sv.Diem },
+            new("@TrangThai", MySqlDbType.VarChar) { Value = sv.TrangThai }
+        };
+    }
+
+    // Đọc từng dòng khi kết nối vẫn mở, rồi chuyển thành danh sách đối tượng.
+    // using ở hàm gọi đóng reader/kết nối cả khi chuyển đổi dữ liệu bị lỗi.
+    private static List<SinhVien> DocDanhSach(MySqlDataReader reader)
+    {
+        var ketQua = new List<SinhVien>();
+        var cacLop = new Dictionary<string, LopHoc>(StringComparer.OrdinalIgnoreCase);
+        while (reader.Read())
+        {
+            string maLop = (string)reader["MaLop"];
+            if (!cacLop.TryGetValue(maLop, out LopHoc? lop))
+            {
+                lop = new LopHoc { MaLop = maLop, TenLop = (string)reader["TenLop"] };
+                cacLop.Add(maLop, lop);
+            }
+            var sv = new SinhVien
+            {
+                MaSV = (string)reader["MaSV"], HoTen = (string)reader["HoTen"],
+                NgaySinh = Convert.ToDateTime(reader["NgaySinh"]), GioiTinh = (string)reader["GioiTinh"],
+                Email = (string)reader["Email"], SDT = (string)reader["SDT"], LopHoc = lop,
+                Diem = Convert.ToDecimal(reader["Diem"]), TrangThai = (string)reader["TrangThai"]
+            };
+            ketQua.Add(sv);
+            lop.SinhViens.Add(sv);
+        }
+        return ketQua;
     }
 }
-

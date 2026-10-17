@@ -9,36 +9,36 @@ namespace Quanlysinhvien.BLL;
 // Form chỉ gọi BLL, không tự sửa các danh sách dữ liệu.
 public class SinhVienBLL
 {
-    private readonly SinhVienDAL dal;
+    private readonly SinhVienDAL dal = new();
     private readonly LopHocBLL lopHocBLL;
 
     public SinhVienBLL() : this(new LopHocBLL()) { }
 
     public SinhVienBLL(LopHocBLL lopHocBLL)
     {
-        // Dùng cùng phần lớp học với form để dữ liệu hai bên luôn khớp nhau.
         this.lopHocBLL = lopHocBLL;
-        dal = new SinhVienDAL(lopHocBLL.TimTheoMa("CSE0001")
-            ?? throw new InvalidOperationException("Không tìm thấy lớp cho sinh viên mẫu."));
     }
 
     public List<LopHoc> LayDanhSachLop() => lopHocBLL.LayDanhSach();
     public List<SinhVien> LayDanhSach() => dal.LayDanhSach();
+    // Hai cách đọc có cùng kiểu kết quả, có thể dùng để đối chiếu khi học.
+    public List<SinhVien> LayDanhSachPhiKetNoi() => dal.LayDanhSachPhiKetNoi();
+    public List<SinhVien> LayTheoMaLop(string maLop) => dal.LayTheoMaLop(maLop);
     public SinhVien? TimTheoMa(string maSV) => dal.TimTheoMa(maSV.Trim());
 
     public List<ValidationResult> LayLoiValidation(SinhVien sv)
     {
         // Chuẩn hóa trước khi dùng Data Annotations kiểm tra đối tượng.
-        sv.MaSV = sv.MaSV.Trim();
-        sv.HoTen = Regex.Replace(sv.HoTen.Trim(), @"\s+", " ");
-        sv.Email = sv.Email.Trim();
-        sv.SDT = sv.SDT.Trim();
+        sv.MaSV = (sv.MaSV ?? "").Trim();
+        sv.HoTen = Regex.Replace((sv.HoTen ?? "").Trim(), @"\s+", " ");
+        sv.Email = (sv.Email ?? "").Trim();
+        sv.SDT = (sv.SDT ?? "").Trim();
         // Kiểm tra khoảng trước khi làm tròn, tránh biến 10.04 thành 10.0.
         if (sv.Diem >= 0 && sv.Diem <= 10)
             sv.Diem = Math.Round(sv.Diem, 1, MidpointRounding.AwayFromZero);
         var ketQua = sv.LayLoiValidation();
 
-        // Chỉ nhận lớp có trong danh sách; dùng cùng đối tượng để giữ quan hệ 1-n.
+        // Chỉ nhận lớp còn tồn tại trong database. Khóa ngoại bảo vệ quan hệ 1-n.
         if (sv.LopHoc != null)
         {
             LopHoc? lop = lopHocBLL.TimTheoMa(sv.LopHoc.MaLop);
@@ -57,54 +57,33 @@ public class SinhVienBLL
         return ketQua.Count == 0;
     }
 
-    public bool Them(SinhVien sv, out string loi)
+    // Lỗi nghiệp vụ dùng ValidationException; lỗi MySQL/cấu hình tự truyền lên View.
+    public void AddSinhVien(SinhVien sv)
     {
-        if (!KiemTra(sv, out loi)) return false;
+        if (!KiemTra(sv, out string loi)) throw new ValidationException(loi);
         if (TimTheoMa(sv.MaSV) != null)
-        {
-            loi = "Mã sinh viên đã tồn tại.";
-            return false;
-        }
-        dal.Them(sv);
-        return true;
+            throw new ValidationException("Mã sinh viên đã tồn tại.");
+        // Khóa chính MySQL vẫn chặn trùng nếu hai người thêm đồng thời.
+        if (dal.AddSinhVien(sv) != 1)
+            throw new ValidationException("Không thêm được sinh viên.");
     }
 
-    public bool Sua(SinhVien sv, out string loi)
+    public void UpdateSinhVien(SinhVien sv)
     {
-        if (!KiemTra(sv, out loi)) return false;
-        SinhVien? cu = TimTheoMa(sv.MaSV);
-        if (cu == null)
-        {
-            loi = "Không tìm thấy sinh viên cần sửa.";
-            return false;
-        }
-        dal.Sua(cu, sv);
-        return true;
+        if (!KiemTra(sv, out string loi)) throw new ValidationException(loi);
+        if (dal.UpdateSinhVien(sv) != 1)
+            throw new ValidationException("Không tìm thấy sinh viên cần sửa. Dữ liệu có thể vừa bị xóa.");
     }
 
-    public bool Xoa(string maSV, out string loi)
+    public void DeleteSinhVien(string maSV)
     {
-        SinhVien? sv = TimTheoMa(maSV);
-        if (sv == null)
-        {
-            loi = "Không tìm thấy sinh viên cần xóa.";
-            return false;
-        }
-        dal.Xoa(sv);
-        loi = "";
-        return true;
+        if (string.IsNullOrWhiteSpace(maSV))
+            throw new ValidationException("Hãy nhập mã sinh viên cần xóa.");
+        if (dal.DeleteSinhVien(maSV) != 1)
+            throw new ValidationException("Không tìm thấy sinh viên cần xóa.");
     }
-
     public List<SinhVien> TimKiem(string tuKhoa, string maLop, decimal diemTu)
     {
-        tuKhoa = tuKhoa.Trim();
-        // Các điều kiện được kết hợp: từ khóa, lớp và điểm tối thiểu.
-        return dal.LayDanhSach().Where(sv =>
-            (sv.MaSV.Contains(tuKhoa, StringComparison.OrdinalIgnoreCase)
-             || sv.HoTen.Contains(tuKhoa, StringComparison.OrdinalIgnoreCase)
-             || sv.Email.Contains(tuKhoa, StringComparison.OrdinalIgnoreCase)
-             || sv.SDT.Contains(tuKhoa))
-            && (maLop == "" || string.Equals(sv.LopHoc?.MaLop, maLop, StringComparison.OrdinalIgnoreCase))
-            && sv.Diem >= diemTu).ToList();
+        return dal.TimKiem(tuKhoa.Trim(), maLop, diemTu);
     }
 }

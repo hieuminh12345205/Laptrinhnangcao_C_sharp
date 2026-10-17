@@ -3,42 +3,18 @@ using Quanlysinhvien.Data.Entity;
 
 namespace Quanlysinhvien.Data.DAL;
 
-// DAL cung cấp các hàm truy cập dữ liệu cho BLL.
-// Trong bài này, DAL chuyển yêu cầu cho DAO xử lý với danh sách trong bộ nhớ.
+// DAL chuyển yêu cầu từ BLL đến DAO chạy SQL.
 public class SinhVienDAL
 {
-    // Tạo một DAO và dùng lại, tránh khởi tạo lại dữ liệu sau mỗi lần gọi hàm.
-    private readonly SinhVienDAO dao;
+    private readonly SinhVienDAO dao = new();
 
-    public SinhVienDAL(LopHoc lopMau)
-    {
-        dao = new SinhVienDAO(lopMau);
-    }
-
-    // Lấy danh sách sinh viên để hiển thị DataGridView.
-    public List<SinhVien> LayDanhSach()
-    {
-        return dao.LayDanhSach();
-    }
-
-    public SinhVien? TimTheoMa(string maSV)
-    {
-        return dao.TimTheoMa(maSV.Trim());
-    }
-
-    // BLL kiểm tra dữ liệu và mã trùng trước khi gọi các hàm ghi dữ liệu.
-    public void Them(SinhVien sv)
-    {
-        dao.Them(sv);
-    }
-
-    public void Sua(SinhVien cu, SinhVien moi)
-    {
-        dao.Sua(cu, moi);
-    }
-
-    public void Xoa(SinhVien sv)
-    {
-        dao.Xoa(sv);
-    }
+    public List<SinhVien> LayDanhSach() => dao.LayDanhSach();
+    public List<SinhVien> LayDanhSachPhiKetNoi() => dao.LayDanhSachPhiKetNoi();
+    public List<SinhVien> LayTheoMaLop(string maLop) => dao.LayTheoMaLop(maLop.Trim());
+    public SinhVien? TimTheoMa(string maSV) => dao.TimTheoMa(maSV.Trim());
+    public List<SinhVien> TimKiem(string tuKhoa, string maLop, decimal diemTu)
+        => dao.TimKiem(tuKhoa, maLop, diemTu);
+    public int AddSinhVien(SinhVien sv) => dao.AddSinhVien(sv);
+    public int UpdateSinhVien(SinhVien sv) => dao.UpdateSinhVien(sv);
+    public int DeleteSinhVien(string maSV) => dao.DeleteSinhVien(maSV.Trim());
 }

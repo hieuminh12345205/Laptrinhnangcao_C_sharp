@@ -1,55 +1,55 @@
+using System.Data;
+using MySql.Data.MySqlClient;
 using Quanlysinhvien.Data.Entity;
 
 namespace Quanlysinhvien.Data.DAO;
 
-// DAO lớp học trực tiếp giữ và thao tác danh sách trong bộ nhớ.
 public class LopHocDAO
 {
-    private readonly List<LopHoc> danhSachLop;
-
-    public LopHocDAO()
-    {
-        // Tạo danh sách và thêm dữ liệu mẫu, tương tự constructor trong bài GV.
-        danhSachLop = new List<LopHoc>();
-        danhSachLop.Add(new LopHoc
-        {
-            MaLop = "CSE0001",
-            TenLop = "Khoa học máy tính 01"
-        });
-        danhSachLop.Add(new LopHoc
-        {
-            MaLop = "CSE0002",
-            TenLop = "Khoa học máy tính 02"
-        });
-        danhSachLop.Add(new LopHoc
-        {
-            MaLop = "CSE0003",
-            TenLop = "Khoa học máy tính 03"
-        });
-    }
+    private DataHelper Helper => new DataHelper();
 
     public List<LopHoc> LayDanhSach()
     {
-        // Sao chép danh sách để bên gọi không thêm/xóa trực tiếp danh sách gốc.
-        return danhSachLop.ToList();
+        var bang = Helper.ExecuteQuery("SELECT MaLop, TenLop FROM lophoc ORDER BY MaLop");
+        return bang.Rows.Cast<DataRow>().Select(dong => new LopHoc
+        {
+            MaLop = (string)dong["MaLop"], TenLop = (string)dong["TenLop"]
+        }).ToList();
     }
 
     public LopHoc? TimTheoMa(string maLop)
     {
-        return danhSachLop.Find(lop => lop.MaLop.Equals(maLop, StringComparison.OrdinalIgnoreCase));
+        var bang = Helper.ExecuteQuery("SELECT MaLop, TenLop FROM lophoc WHERE MaLop = @MaLop",
+            new MySqlParameter("@MaLop", MySqlDbType.VarChar) { Value = maLop });
+        if (bang.Rows.Count == 0) return null;
+        return new LopHoc { MaLop = (string)bang.Rows[0]["MaLop"], TenLop = (string)bang.Rows[0]["TenLop"] };
     }
 
-    public void Them(LopHoc lop)
+    public bool CoSinhVien(string maLop)
     {
-        // Lớp mới bắt đầu với danh sách sinh viên trống.
-        danhSachLop.Add(new LopHoc { MaLop = lop.MaLop, TenLop = lop.TenLop });
+        // Kiểm tra database hiện tại, không dựa vào một danh sách cũ trong bộ nhớ.
+        var bang = Helper.ExecuteQuery("SELECT MaSV FROM sinhvien WHERE MaLop = @MaLop LIMIT 1",
+            new MySqlParameter("@MaLop", MySqlDbType.VarChar) { Value = maLop });
+        return bang.Rows.Count > 0;
     }
 
-    public void Sua(LopHoc cu, LopHoc moi)
+    public int Them(LopHoc lop)
     {
-        // Giữ đối tượng cũ và danh sách sinh viên để bảo toàn quan hệ 1-n.
-        cu.TenLop = moi.TenLop;
+        return Helper.ExecuteNonQuery("INSERT INTO lophoc (MaLop, TenLop) VALUES (@MaLop, @TenLop)",
+            new MySqlParameter("@MaLop", MySqlDbType.VarChar) { Value = lop.MaLop },
+            new MySqlParameter("@TenLop", MySqlDbType.VarChar) { Value = lop.TenLop });
     }
 
-    public void Xoa(LopHoc lop) => danhSachLop.Remove(lop);
+    public int Sua(LopHoc cu, LopHoc moi)
+    {
+        return Helper.ExecuteNonQuery("UPDATE lophoc SET TenLop = @TenLop WHERE MaLop = @MaLop",
+            new MySqlParameter("@TenLop", MySqlDbType.VarChar) { Value = moi.TenLop },
+            new MySqlParameter("@MaLop", MySqlDbType.VarChar) { Value = cu.MaLop });
+    }
+
+    public int Xoa(LopHoc lop)
+    {
+        return Helper.ExecuteNonQuery("DELETE FROM lophoc WHERE MaLop = @MaLop",
+            new MySqlParameter("@MaLop", MySqlDbType.VarChar) { Value = lop.MaLop });
+    }
 }
