@@ -1,0 +1,6 @@
+# Cấu hình riêng có mật khẩu; chỉ đưa mysql.example.json lên Git.
+mysql.local.json
+bin/
+obj/
+.vs/
+*.user

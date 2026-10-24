@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="QLTVApp/QLTVApp.csproj" />
+  <Project Path="QLTVDAO/QLTVDAO.csproj" />
+</Solution>
