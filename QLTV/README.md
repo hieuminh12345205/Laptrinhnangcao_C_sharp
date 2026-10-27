@@ -11,10 +11,6 @@ Mỗi tab có thêm/sửa/xóa/làm mới; chọn dòng để sửa, hỏi xác 
 báo chưa thay đổi khi bấm Sửa mà dữ liệu vẫn như cũ. Tab Đầu sách tìm tên/tác giả và lọc danh mục;
 tab Bản sách lọc theo đầu sách. Lỗi nhập hiển thị bằng ErrorProvider, lỗi BLL/DAL được View bắt và thông báo.
 
-Tham khảo bài [24_10_2026_EFW của MKII3184/LTNC](https://github.com/MKII3184/LTNC/tree/main/24_10_2026_EFW),
-gồm Book, Category, BookCopy, BookDbContext và migration InitialBookDB.
-Code trong dự án này được viết lại, bổ sung validation, phân tầng và cấu hình riêng không lộ mật khẩu.
-
 ## Mô hình dữ liệu
 
 ```text
