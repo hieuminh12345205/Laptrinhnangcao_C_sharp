@@ -28,11 +28,17 @@ namespace QLTVDAO.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Author")
+                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
+
+                    b.Property<string>("MaSach")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
 
                     b.Property<decimal>("Price")
                         .HasPrecision(18, 2)
@@ -50,18 +56,16 @@ namespace QLTVDAO.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)");
 
-                    b.Property<int>("TotalCopies")
-                        .HasColumnType("int");
-
                     b.HasKey("BookId");
 
                     b.HasIndex("CategoryId");
 
+                    b.HasIndex("MaSach")
+                        .IsUnique();
+
                     b.ToTable("Books", null, t =>
                         {
                             t.HasCheckConstraint("CK_Books_Price", "Price >= 0 AND Price <= 999999999");
-
-                            t.HasCheckConstraint("CK_Books_TotalCopies", "TotalCopies BETWEEN 1 AND 100000");
 
                             t.HasCheckConstraint("CK_Books_Year", "PublicationYear BETWEEN 1000 AND 9999");
                         });
@@ -81,6 +85,11 @@ namespace QLTVDAO.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
 
+                    b.Property<string>("MaBanSao")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -89,6 +98,9 @@ namespace QLTVDAO.Migrations
                     b.HasKey("BookCopyId");
 
                     b.HasIndex("BookId");
+
+                    b.HasIndex("MaBanSao")
+                        .IsUnique();
 
                     b.ToTable("BookCopies", (string)null);
                 });

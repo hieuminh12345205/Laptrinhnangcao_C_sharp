@@ -16,16 +16,28 @@ public class BookDAO
         var query = db.Books.AsNoTrackingWithIdentityResolution()
             .Include(x => x.Category).Include(x => x.BookCopies).AsQueryable();
         if (!string.IsNullOrWhiteSpace(tuKhoa))
-            query = query.Where(x => x.Title.Contains(tuKhoa) || (x.Author != null && x.Author.Contains(tuKhoa)));
+            query = query.Where(x => x.MaSach.Contains(tuKhoa) || x.Title.Contains(tuKhoa) || x.Author.Contains(tuKhoa));
         if (categoryId.HasValue) query = query.Where(x => x.CategoryId == categoryId.Value);
         // EF chuyển các giá trị LINQ thành tham số; không ghép chuỗi SQL.
-        return query.OrderBy(x => x.BookId).ToList();
+        return query.OrderBy(x => x.MaSach).ToList();
     }
     public Book? TimTheoMa(int id)
     {
         using var db = taoContext();
         return db.Books.AsNoTrackingWithIdentityResolution().Include(x => x.Category)
             .Include(x => x.BookCopies).SingleOrDefault(x => x.BookId == id);
+    }
+    public Book? TimTheoMaSach(string maSach)
+    {
+        using var db = taoContext();
+        return db.Books.AsNoTrackingWithIdentityResolution().Include(x => x.Category)
+            .Include(x => x.BookCopies).SingleOrDefault(x => x.MaSach == maSach);
+    }
+    // boQuaId: bản ghi đang sửa, không tính là trùng với chính nó.
+    public bool MaSachDaDung(string maSach, int boQuaId = 0)
+    {
+        using var db = taoContext();
+        return db.Books.Any(x => x.MaSach == maSach && x.BookId != boQuaId);
     }
     public void Them(Book book)
     {
@@ -54,11 +66,11 @@ public class BookDAO
     }
     private static void GanThuocTinh(Book dich, Book nguon)
     {
+        dich.MaSach = nguon.MaSach;
         dich.Title = nguon.Title;
         dich.Author = nguon.Author;
         dich.Publisher = nguon.Publisher;
         dich.Price = nguon.Price;
-        dich.TotalCopies = nguon.TotalCopies;
         dich.PublicationYear = nguon.PublicationYear;
         dich.CategoryId = nguon.CategoryId;
     }

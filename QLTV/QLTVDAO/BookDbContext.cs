@@ -35,10 +35,11 @@ public class BookDbContext : DbContext
             book.ToTable("Books", table =>
             {
                 table.HasCheckConstraint("CK_Books_Price", "Price >= 0 AND Price <= 999999999");
-                table.HasCheckConstraint("CK_Books_TotalCopies", "TotalCopies BETWEEN 1 AND 100000");
                 table.HasCheckConstraint("CK_Books_Year", "PublicationYear BETWEEN 1000 AND 9999");
             });
             book.Property(x => x.Price).HasPrecision(18, 2);
+            // Mã nghiệp vụ không được trùng; unique index chặn ngay cả khi gọi thẳng DAO.
+            book.HasIndex(x => x.MaSach).IsUnique();
             // Restrict tránh xóa danh mục rồi mất toàn bộ đầu sách ngoài ý muốn.
             book.HasOne(x => x.Category).WithMany(x => x.Books)
                 .HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
@@ -46,6 +47,7 @@ public class BookDbContext : DbContext
         modelBuilder.Entity<BookCopy>(copy =>
         {
             copy.ToTable("BookCopies");
+            copy.HasIndex(x => x.MaBanSao).IsUnique();
             copy.HasOne(x => x.Book).WithMany(x => x.BookCopies)
                 .HasForeignKey(x => x.BookId).OnDelete(DeleteBehavior.Restrict);
         });

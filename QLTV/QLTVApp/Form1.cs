@@ -10,7 +10,13 @@ namespace QLTVApp
         private readonly CategoryBLL categoryBLL;
         private readonly BookBLL bookBLL;
         private readonly BookCopyBLL copyBLL;
-        private int bookId, categoryId, copyId; // 0: thêm mới; > 0: đang chọn bản ghi.
+        private int bookId;  // 0: đang nhập đầu sách mới; > 0: đang chọn một đầu sách.
+        private int copyId;  // 0: chưa chọn bản sao nào.
+        private Book? sachDangChon;
+        // Nạp lại lưới làm SelectionChanged bắn liên tục; cờ này chặn xử lý trong lúc nạp.
+        private bool dangTaiLuoi;
+
+        private static readonly string[] DanhSachTrangThai = { "Sẵn sàng", "Đang mượn", "Bảo trì", "Thất lạc" };
 
         public Form1() : this(null) { }
 
@@ -21,314 +27,319 @@ namespace QLTVApp
             bookBLL = new BookBLL(taoContext);
             copyBLL = new BookCopyBLL(taoContext);
             InitializeComponent();
-            cboCopyStatus.Items.AddRange(new object[] { "Có sẵn", "Đang mượn", "Bảo trì", "Thất lạc" });
+            cboCopyStatus.Items.AddRange(DanhSachTrangThai);
+            cboCopyStatus.SelectedIndex = 0;
             nudYear.Maximum = DateTime.Today.Year;
+            nudYear.Value = DateTime.Today.Year;
 
             Load += (_, _) => ThucHienAnToan(() =>
             {
                 // Mở View Designer không truy cập database.
                 if (DesignMode || System.ComponentModel.LicenseManager.UsageMode == System.ComponentModel.LicenseUsageMode.Designtime) return;
-                TaiLaiDuLieu();
-                LamMoiSach(); LamMoiDanhMuc(); LamMoiBanSach();
-                // Database mới chưa có danh mục: bắt đầu ở tab cần nhập trước.
-                if (cboCategory.Items.Count == 0) tabsMain.SelectedTab = tabCategories;
-                BeginInvoke(new Action(() =>
-                {
-                    if (tabsMain.SelectedTab == tabCategories) txtDescription.Focus();
-                    else txtTitle.Focus();
-                }));
+                TaiDanhMuc();
+                HienThiSach();
+                LamTrong();
+                // Màn hình này không quản lý thể loại; database trống thì chưa thêm được đầu sách.
+                if (cboCategory.Items.Count == 0)
+                    HienThongBao("Chưa có thể loại nào trong database nên chưa thêm được đầu sách.\n"
+                        + "Hãy thêm thể loại vào bảng Categories trước, ví dụ bằng MySQL Workbench.", true);
+                BeginInvoke(new Action(() => txtMaSach.Focus()));
             });
-            btnReload.Click += (_, _) => ThucHienAnToan(TaiLaiDuLieu);
-            btnClose.Click += (_, _) => Close();
-            FormClosing += (_, e) =>
-            {
-                if (!XacNhan("Bạn có muốn đóng ứng dụng? Thông tin đang nhập chưa lưu sẽ mất.")) e.Cancel = true;
-            };
-            tabsMain.SelectedIndexChanged += (_, _) =>
-            {
-                if (tabsMain.SelectedTab == tabBooks) txtTitle.Focus();
-                else if (tabsMain.SelectedTab == tabCategories) txtDescription.Focus();
-                else cboCopyBook.Focus();
-            };
 
-            btnBookAdd.Click += (_, _) => ThucHienAnToan(ThemSach);
-            btnBookSave.Click += (_, _) => ThucHienAnToan(SuaSach);
-            btnBookDelete.Click += (_, _) => ThucHienAnToan(XoaSach);
-            btnBookNew.Click += (_, _) => LamMoiSach();
-            btnBookSearch.Click += (_, _) => ThucHienAnToan(HienThiSach);
-            btnBookAll.Click += (_, _) => ThucHienAnToan(() =>
-            {
-                txtBookSearch.Clear(); cboBookFilter.SelectedValue = 0; HienThiSach();
-            });
-            txtBookSearch.KeyDown += (_, e) =>
+            btnSearch.Click += (_, _) => ThucHienAnToan(HienThiSach);
+            txtSearch.KeyDown += (_, e) =>
             {
                 if (e.KeyCode != Keys.Enter) return;
                 e.SuppressKeyPress = true;
                 ThucHienAnToan(HienThiSach);
             };
-            dgvBooks.CellClick += (_, e) => ThucHienAnToan(() =>
+            btnReload.Click += (_, _) => ThucHienAnToan(() =>
             {
-                if (e.RowIndex < 0) return;
-                int id = Convert.ToInt32(dgvBooks.Rows[e.RowIndex].Cells["colBookId"].Value);
-                DienSach(bookBLL.TimTheoMa(id) ?? throw new ValidationException("Đầu sách này không còn tồn tại."));
+                txtSearch.Clear();
+                if (cboFilter.Items.Count > 0) cboFilter.SelectedIndex = 0;
+                TaiDanhMuc();
+                HienThiSach();
+                LamTrong();
             });
 
-            btnCategoryAdd.Click += (_, _) => ThucHienAnToan(ThemDanhMuc);
-            btnCategorySave.Click += (_, _) => ThucHienAnToan(SuaDanhMuc);
-            btnCategoryDelete.Click += (_, _) => ThucHienAnToan(XoaDanhMuc);
-            btnCategoryNew.Click += (_, _) => LamMoiDanhMuc();
-            dgvCategories.CellClick += (_, e) => ThucHienAnToan(() =>
+            dgvBooks.SelectionChanged += (_, _) => ThucHienAnToan(() =>
             {
-                if (e.RowIndex < 0) return;
-                int id = Convert.ToInt32(dgvCategories.Rows[e.RowIndex].Cells["colCategoryId"].Value);
-                DienDanhMuc(categoryBLL.TimTheoMa(id) ?? throw new ValidationException("Danh mục này không còn tồn tại."));
+                if (dangTaiLuoi) return;
+                if (dgvBooks.CurrentRow?.Tag is not Book book) return;
+                ChonSach(book);
             });
+            dgvCopies.SelectionChanged += (_, _) =>
+            {
+                if (dangTaiLuoi) return;
+                if (dgvCopies.CurrentRow?.Tag is not BookCopy copy) { copyId = 0; CapNhatTrangThaiNut(); return; }
+                copyId = copy.BookCopyId;
+                ChonTrangThai(copy.Status);
+                txtCopyCondition.Text = copy.Condition;
+                CapNhatTrangThaiNut();
+            };
 
-            btnCopyAdd.Click += (_, _) => ThucHienAnToan(ThemBanSach);
-            btnCopySave.Click += (_, _) => ThucHienAnToan(SuaBanSach);
-            btnCopyDelete.Click += (_, _) => ThucHienAnToan(XoaBanSach);
-            btnCopyNew.Click += (_, _) => LamMoiBanSach();
-            btnCopyFilter.Click += (_, _) => ThucHienAnToan(HienThiBanSach);
-            btnCopyAll.Click += (_, _) => ThucHienAnToan(() =>
-            {
-                cboCopyFilter.SelectedValue = 0; HienThiBanSach();
-            });
-            dgvCopies.CellClick += (_, e) => ThucHienAnToan(() =>
-            {
-                if (e.RowIndex < 0) return;
-                int id = Convert.ToInt32(dgvCopies.Rows[e.RowIndex].Cells["colCopyId"].Value);
-                DienBanSach(copyBLL.TimTheoMa(id) ?? throw new ValidationException("Bản sách này không còn tồn tại."));
-            });
+            btnBookAdd.Click += (_, _) => ThucHienAnToan(ThemSach);
+            btnBookSave.Click += (_, _) => ThucHienAnToan(SuaSach);
+            btnBookDelete.Click += (_, _) => ThucHienAnToan(XoaSach);
+            btnBookClear.Click += (_, _) => LamTrong();
+
+            btnNhapBoSung.Click += (_, _) => ThucHienAnToan(NhapBoSungBanSao);
+            btnCopyAdd.Click += (_, _) => ThucHienAnToan(NhapBoSungBanSao);
+            btnCopySave.Click += (_, _) => ThucHienAnToan(CapNhatBanSao);
+            btnCopyDelete.Click += (_, _) => ThucHienAnToan(XoaBanSao);
 
             // Đổi nội dung ô nhập thì xóa dấu báo lỗi của ô đó.
-            foreach (Control control in new Control[] { txtTitle, txtAuthor, txtPublisher, txtDescription, txtCondition })
+            foreach (Control control in new Control[] { txtMaSach, txtTitle, txtAuthor, txtPublisher, txtCopyCondition })
                 control.TextChanged += (_, _) => errorProvider.SetError(control, "");
-            foreach (ComboBox control in new[] { cboCategory, cboCopyBook, cboCopyStatus })
-                control.SelectedIndexChanged += (_, _) => errorProvider.SetError(control, "");
-            foreach (NumericUpDown control in new[] { nudPrice, nudYear, nudTotalCopies })
+            cboCategory.SelectedIndexChanged += (_, _) => errorProvider.SetError(cboCategory, "");
+            foreach (NumericUpDown control in new[] { nudPrice, nudYear })
                 control.ValueChanged += (_, _) => errorProvider.SetError(control, "");
-            LamMoiSach(); LamMoiDanhMuc(); LamMoiBanSach();
+
+            FormClosing += (_, e) =>
+            {
+                if (e.CloseReason == CloseReason.WindowsShutDown) return;
+                if (!XacNhan("Bạn có muốn đóng ứng dụng? Thông tin đang nhập chưa lưu sẽ mất.")) e.Cancel = true;
+            };
         }
 
-        private static int? MaLoc(ComboBox combo)
-            => combo.SelectedValue is int id && id > 0 ? id : null;
+        // ---------- Nạp dữ liệu ----------
 
-        private static void ChonMa(ComboBox combo, int? id)
+        private void TaiDanhMuc()
         {
-            combo.SelectedIndex = -1;
-            if (id.HasValue) combo.SelectedValue = id.Value;
-        }
+            var danhSach = categoryBLL.LayDanhSach();
 
-        private void TaiLaiDuLieu()
-        {
-            // Mỗi ComboBox dùng một List riêng để không tự thay đổi lựa chọn của nhau.
-            int? danhMuc = (cboCategory.SelectedItem as Category)?.CategoryId;
-            int? dauSach = (cboCopyBook.SelectedItem as Book)?.BookId;
-            int locDanhMuc = MaLoc(cboBookFilter) ?? 0;
-            int locDauSach = MaLoc(cboCopyFilter) ?? 0;
-            var categories = categoryBLL.LayDanhSach();
-            var books = bookBLL.LayDanhSach();
+            object? locDangChon = cboFilter.SelectedValue;
+            var choLoc = new List<Category> { new() { CategoryId = 0, Description = "-- Tất cả thể loại --" } };
+            choLoc.AddRange(danhSach);
+            cboFilter.DataSource = choLoc;
+            cboFilter.DisplayMember = nameof(Category.Description);
+            cboFilter.ValueMember = nameof(Category.CategoryId);
+            if (locDangChon != null && choLoc.Any(x => x.CategoryId == Convert.ToInt32(locDangChon)))
+                cboFilter.SelectedValue = locDangChon;
+            else cboFilter.SelectedIndex = 0;
 
+            // Danh sách riêng cho ô chọn thể loại: hai ComboBox không dùng chung một nguồn dữ liệu.
+            object? sachDangChonLoai = cboCategory.SelectedValue;
+            cboCategory.DataSource = new List<Category>(danhSach);
             cboCategory.DisplayMember = nameof(Category.Description);
             cboCategory.ValueMember = nameof(Category.CategoryId);
-            cboCategory.DataSource = categories.ToList();
-            ChonMa(cboCategory, danhMuc);
-
-            var categoriesFilter = new List<Category> { new() { CategoryId = 0, Description = "Tất cả danh mục" } };
-            categoriesFilter.AddRange(categories);
-            cboBookFilter.DisplayMember = nameof(Category.Description);
-            cboBookFilter.ValueMember = nameof(Category.CategoryId);
-            cboBookFilter.DataSource = categoriesFilter;
-            cboBookFilter.SelectedValue = categories.Any(x => x.CategoryId == locDanhMuc) ? locDanhMuc : 0;
-
-            cboCopyBook.DisplayMember = nameof(Book.Title);
-            cboCopyBook.ValueMember = nameof(Book.BookId);
-            cboCopyBook.DataSource = books.ToList();
-            ChonMa(cboCopyBook, dauSach);
-
-            var booksFilter = new List<Book> { new() { BookId = 0, Title = "Tất cả đầu sách" } };
-            booksFilter.AddRange(books);
-            cboCopyFilter.DisplayMember = nameof(Book.Title);
-            cboCopyFilter.ValueMember = nameof(Book.BookId);
-            cboCopyFilter.DataSource = booksFilter;
-            cboCopyFilter.SelectedValue = books.Any(x => x.BookId == locDauSach) ? locDauSach : 0;
-
-            dgvCategories.DataSource = categories.Select(x => new { x.CategoryId, x.Description }).ToList();
-            dgvCategories.ClearSelection();
-            lblCategoryCount.Text = $"Số danh mục: {categories.Count}";
-            HienThiSach(); HienThiBanSach();
-            if (bookId > 0) lblRegisteredCount.Text = (books.FirstOrDefault(x => x.BookId == bookId)?.BookCopies.Count ?? 0).ToString();
+            if (sachDangChonLoai != null && danhSach.Any(x => x.CategoryId == Convert.ToInt32(sachDangChonLoai)))
+                cboCategory.SelectedValue = sachDangChonLoai;
+            else if (danhSach.Count > 0) cboCategory.SelectedIndex = 0;
+            else cboCategory.SelectedIndex = -1;
         }
 
         private void HienThiSach()
         {
-            var books = bookBLL.LayDanhSach(txtBookSearch.Text, MaLoc(cboBookFilter));
-            dgvBooks.DataSource = books.Select(x => new
+            int loc = cboFilter.SelectedValue == null ? 0 : Convert.ToInt32(cboFilter.SelectedValue);
+            var danhSach = bookBLL.LayDanhSach(txtSearch.Text.Trim(), loc == 0 ? null : loc);
+
+            dangTaiLuoi = true;
+            try
             {
-                x.BookId, x.Title, x.Author, x.Publisher, x.PublicationYear, x.Price, x.TotalCopies,
-                RegisteredCopies = x.BookCopies.Count, CategoryDescription = x.Category.Description
-            }).ToList();
-            dgvBooks.ClearSelection();
-            lblBookCount.Text = $"Số đầu sách hiển thị: {books.Count}";
+                dgvBooks.Rows.Clear();
+                foreach (var book in danhSach)
+                {
+                    int dong = dgvBooks.Rows.Add(book.MaSach, book.Title, book.Category?.Description,
+                        book.Author, book.Publisher, book.Price, book.PublicationYear, book.SoBanSao);
+                    dgvBooks.Rows[dong].Tag = book;
+                }
+                dgvBooks.ClearSelection();
+                dgvBooks.CurrentCell = null;
+            }
+            finally { dangTaiLuoi = false; }
+            lblTrangThai.Text = $"Đã tải {danhSach.Count} đầu sách lúc {DateTime.Now:HH:mm:ss}.";
         }
 
-        private void HienThiBanSach()
+        private void HienThiBanSao()
         {
-            var copies = copyBLL.LayDanhSach(MaLoc(cboCopyFilter));
-            dgvCopies.DataSource = copies.Select(x => new { x.BookCopyId, x.BookId, Title = x.Book.Title, x.Status, x.Condition }).ToList();
-            dgvCopies.ClearSelection();
-            lblCopyCount.Text = $"Số bản sách hiển thị: {copies.Count}";
+            copyId = 0;
+            if (bookId == 0)
+            {
+                dangTaiLuoi = true;
+                try { dgvCopies.Rows.Clear(); } finally { dangTaiLuoi = false; }
+                grpCopies.Text = "Danh sách bản sao";
+                txtSoBanSao.Text = "0";
+                CapNhatTrangThaiNut();
+                return;
+            }
+            var danhSach = copyBLL.LayDanhSach(bookId);
+            dangTaiLuoi = true;
+            try
+            {
+                dgvCopies.Rows.Clear();
+                foreach (var copy in danhSach)
+                {
+                    int dong = dgvCopies.Rows.Add(copy.MaBanSao, copy.Status, copy.Condition);
+                    dgvCopies.Rows[dong].Tag = copy;
+                }
+                dgvCopies.ClearSelection();
+                dgvCopies.CurrentCell = null;
+            }
+            finally { dangTaiLuoi = false; }
+            txtSoBanSao.Text = danhSach.Count.ToString();
+            grpCopies.Text = $"Danh sách bản sao của sách {sachDangChon?.MaSach} ({danhSach.Count} bản sao)";
+            CapNhatTrangThaiNut();
+        }
+
+        // ---------- Đầu sách ----------
+
+        private void ChonSach(Book book)
+        {
+            errorProvider.Clear();
+            sachDangChon = book;
+            bookId = book.BookId;
+            txtMaSach.Text = book.MaSach;
+            txtTitle.Text = book.Title;
+            txtAuthor.Text = book.Author;
+            txtPublisher.Text = book.Publisher ?? "";
+            if (cboCategory.Items.Count > 0) cboCategory.SelectedValue = book.CategoryId;
+            nudPrice.Value = Math.Clamp(book.Price, nudPrice.Minimum, nudPrice.Maximum);
+            nudYear.Value = Math.Clamp(book.PublicationYear, (int)nudYear.Minimum, (int)nudYear.Maximum);
+            HienThiBanSao();
+        }
+
+        private void LamTrong()
+        {
+            errorProvider.Clear();
+            bookId = 0; copyId = 0; sachDangChon = null;
+            txtMaSach.Clear(); txtTitle.Clear(); txtAuthor.Clear(); txtPublisher.Clear();
+            if (cboCategory.Items.Count > 0) cboCategory.SelectedIndex = 0;
+            nudPrice.Value = 0;
+            nudYear.Value = DateTime.Today.Year;
+            txtCopyCondition.Text = "Mới";
+            cboCopyStatus.SelectedIndex = 0;
+            nudSoBanNhap.Value = 1;
+            dangTaiLuoi = true;
+            try { dgvBooks.ClearSelection(); dgvBooks.CurrentCell = null; }
+            finally { dangTaiLuoi = false; }
+            HienThiBanSao();
+            txtMaSach.Focus();
         }
 
         private Book DocSach() => new()
         {
-            BookId = bookId, Title = txtTitle.Text.Trim(), Author = txtAuthor.Text.Trim(),
-            Publisher = txtPublisher.Text.Trim(), Price = nudPrice.Value,
-            PublicationYear = (int)nudYear.Value, TotalCopies = (int)nudTotalCopies.Value,
-            CategoryId = (cboCategory.SelectedItem as Category)?.CategoryId ?? 0
+            BookId = bookId,
+            MaSach = txtMaSach.Text.Trim().ToUpperInvariant(),
+            Title = txtTitle.Text.Trim(),
+            Author = txtAuthor.Text.Trim(),
+            Publisher = txtPublisher.Text.Trim(),
+            Price = nudPrice.Value,
+            PublicationYear = (int)nudYear.Value,
+            CategoryId = cboCategory.SelectedValue == null ? 0 : Convert.ToInt32(cboCategory.SelectedValue)
         };
-
-        private void DienSach(Book book)
-        {
-            KiemTraDuLieu.KiemTra(book); // Kiểm tra trước khi gán giá trị vào NumericUpDown.
-            errorProvider.Clear(); bookId = book.BookId;
-            txtBookId.Text = book.BookId.ToString(); txtTitle.Text = book.Title;
-            txtAuthor.Text = book.Author ?? ""; txtPublisher.Text = book.Publisher ?? "";
-            nudPrice.Value = book.Price; nudYear.Value = book.PublicationYear; nudTotalCopies.Value = book.TotalCopies;
-            ChonMa(cboCategory, book.CategoryId);
-            lblRegisteredCount.Text = book.BookCopies.Count.ToString();
-            TrangThaiNut(btnBookAdd, btnBookSave, btnBookDelete, bookId);
-        }
-
-        private void LamMoiSach()
-        {
-            bookId = 0; errorProvider.Clear(); txtBookId.Clear(); txtTitle.Clear(); txtAuthor.Clear(); txtPublisher.Clear();
-            nudPrice.Value = 0; nudYear.Value = DateTime.Today.Year; nudTotalCopies.Value = 1;
-            cboCategory.SelectedIndex = -1; lblRegisteredCount.Text = "0";
-            TrangThaiNut(btnBookAdd, btnBookSave, btnBookDelete, 0);
-            dgvBooks.ClearSelection(); txtTitle.Focus();
-        }
 
         private bool KiemTraSach(Book book) => KiemTraNhap(book, new()
         {
-            [nameof(Book.Title)] = txtTitle, [nameof(Book.Author)] = txtAuthor,
-            [nameof(Book.Publisher)] = txtPublisher, [nameof(Book.Price)] = nudPrice,
-            [nameof(Book.PublicationYear)] = nudYear, [nameof(Book.TotalCopies)] = nudTotalCopies,
+            [nameof(Book.MaSach)] = txtMaSach,
+            [nameof(Book.Title)] = txtTitle,
+            [nameof(Book.Author)] = txtAuthor,
+            [nameof(Book.Publisher)] = txtPublisher,
+            [nameof(Book.Price)] = nudPrice,
+            [nameof(Book.PublicationYear)] = nudYear,
             [nameof(Book.CategoryId)] = cboCategory
         });
 
         private void ThemSach()
         {
+            if (bookId != 0) { HienThongBao("Đang chọn một đầu sách. Bấm Làm trống trước khi thêm mới.", true); return; }
             var book = DocSach(); if (!KiemTraSach(book)) return;
             bookBLL.Them(book);
-            HoanTatLuu("Đã thêm đầu sách.", () => { LamMoiSach(); DienSach(bookBLL.TimTheoMa(book.BookId)!); });
+            HoanTatLuu($"Đã thêm đầu sách {book.MaSach}.", () => ChonTheoMa(book.BookId));
         }
 
         private void SuaSach()
         {
             var cu = bookBLL.TimTheoMa(bookId) ?? throw new ValidationException("Không tìm thấy đầu sách cần sửa.");
             var moi = DocSach(); if (!KiemTraSach(moi)) return;
-            if (cu.Title == moi.Title && (cu.Author ?? "") == moi.Author && (cu.Publisher ?? "") == moi.Publisher
-                && cu.Price == moi.Price && cu.TotalCopies == moi.TotalCopies
+            if (cu.MaSach == moi.MaSach && cu.Title == moi.Title && cu.Author == moi.Author
+                && (cu.Publisher ?? "") == moi.Publisher && cu.Price == moi.Price
                 && cu.PublicationYear == moi.PublicationYear && cu.CategoryId == moi.CategoryId)
             { ThongBaoChuaDoi(); return; }
-            if (!XacNhan($"Bạn có muốn lưu thay đổi đầu sách {bookId}?")) return;
+            if (!XacNhan($"Bạn có muốn lưu thay đổi của đầu sách {cu.MaSach}?")) return;
             bookBLL.Sua(moi);
-            HoanTatLuu("Đã sửa đầu sách.", () => DienSach(bookBLL.TimTheoMa(bookId)!));
+            HoanTatLuu($"Đã lưu chỉnh sửa đầu sách {moi.MaSach}.", () => ChonTheoMa(moi.BookId));
         }
 
         private void XoaSach()
         {
             var book = bookBLL.TimTheoMa(bookId) ?? throw new ValidationException("Không tìm thấy đầu sách cần xóa.");
-            if (!XacNhan($"Bạn có chắc muốn xóa đầu sách {book.BookId} - {book.Title}?")) return;
+            if (!XacNhan($"Bạn có chắc muốn xóa đầu sách {book.MaSach} - {book.Title}?")) return;
             bookBLL.Xoa(book.BookId);
-            HoanTatLuu("Đã xóa đầu sách.", LamMoiSach);
+            HoanTatLuu($"Đã xóa đầu sách {book.MaSach}.", LamTrong);
         }
 
-        private void DienDanhMuc(Category category)
+        // Sau khi tải lại danh sách, chọn lại đúng dòng vừa thao tác.
+        private void ChonTheoMa(int id)
         {
-            errorProvider.Clear(); categoryId = category.CategoryId;
-            txtCategoryId.Text = categoryId.ToString(); txtDescription.Text = category.Description;
-            TrangThaiNut(btnCategoryAdd, btnCategorySave, btnCategoryDelete, categoryId);
-        }
-        private void LamMoiDanhMuc()
-        {
-            categoryId = 0; errorProvider.Clear(); txtCategoryId.Clear(); txtDescription.Clear();
-            TrangThaiNut(btnCategoryAdd, btnCategorySave, btnCategoryDelete, 0);
-            dgvCategories.ClearSelection(); txtDescription.Focus();
-        }
-        private Category DocDanhMuc() => new() { CategoryId = categoryId, Description = txtDescription.Text.Trim() };
-        private bool KiemTraDanhMuc(Category category)
-            => KiemTraNhap(category, new() { [nameof(Category.Description)] = txtDescription });
-        private void ThemDanhMuc()
-        {
-            var category = DocDanhMuc(); if (!KiemTraDanhMuc(category)) return;
-            categoryBLL.Them(category);
-            HoanTatLuu("Đã thêm danh mục.", () => { LamMoiDanhMuc(); DienDanhMuc(category); });
-        }
-        private void SuaDanhMuc()
-        {
-            var cu = categoryBLL.TimTheoMa(categoryId) ?? throw new ValidationException("Không tìm thấy danh mục cần sửa.");
-            var moi = DocDanhMuc(); if (!KiemTraDanhMuc(moi)) return;
-            if (cu.Description == moi.Description) { ThongBaoChuaDoi(); return; }
-            if (!XacNhan($"Bạn có muốn sửa danh mục {categoryId}?")) return;
-            categoryBLL.Sua(moi);
-            HoanTatLuu("Đã sửa danh mục.", () => DienDanhMuc(moi));
-        }
-        private void XoaDanhMuc()
-        {
-            if (!XacNhan($"Bạn có chắc muốn xóa danh mục {categoryId}?")) return;
-            categoryBLL.Xoa(categoryId);
-            HoanTatLuu("Đã xóa danh mục.", LamMoiDanhMuc);
+            foreach (DataGridViewRow dong in dgvBooks.Rows)
+                if (dong.Tag is Book book && book.BookId == id)
+                {
+                    dangTaiLuoi = true;
+                    try { dong.Selected = true; dgvBooks.CurrentCell = dong.Cells[0]; }
+                    finally { dangTaiLuoi = false; }
+                    ChonSach(book);
+                    return;
+                }
+            LamTrong();
         }
 
-        private BookCopy DocBanSach() => new()
+        // ---------- Bản sao ----------
+
+        private void NhapBoSungBanSao()
         {
-            BookCopyId = copyId, BookId = (cboCopyBook.SelectedItem as Book)?.BookId ?? 0,
-            Status = cboCopyStatus.Text, Condition = txtCondition.Text.Trim()
-        };
-        private bool KiemTraBanSach(BookCopy copy) => KiemTraNhap(copy, new()
-        {
-            [nameof(BookCopy.BookId)] = cboCopyBook, [nameof(BookCopy.Status)] = cboCopyStatus,
-            [nameof(BookCopy.Condition)] = txtCondition
-        });
-        private void DienBanSach(BookCopy copy)
-        {
-            errorProvider.Clear(); copyId = copy.BookCopyId; txtCopyId.Text = copyId.ToString();
-            ChonMa(cboCopyBook, copy.BookId);
-            // Giữ được cả trạng thái cũ đã được lưu bằng chương trình khác.
-            if (!cboCopyStatus.Items.Contains(copy.Status)) cboCopyStatus.Items.Add(copy.Status);
-            cboCopyStatus.SelectedItem = copy.Status; txtCondition.Text = copy.Condition;
-            TrangThaiNut(btnCopyAdd, btnCopySave, btnCopyDelete, copyId);
+            if (bookId == 0) { HienThongBao("Hãy chọn một đầu sách trước khi nhập bản sao.", true); return; }
+            int soLuong = (int)nudSoBanNhap.Value;
+            string trangThai = cboCopyStatus.Text.Trim();
+            string tinhTrang = txtCopyCondition.Text.Trim();
+            if (tinhTrang.Length == 0)
+            {
+                errorProvider.SetError(txtCopyCondition, "Hãy nhập tình trạng vật lý của bản sao.");
+                txtCopyCondition.Focus();
+                return;
+            }
+            if (!XacNhan($"Nhập thêm {soLuong} bản sao cho đầu sách {sachDangChon?.MaSach}?")) return;
+            var moi = copyBLL.Them(bookId, soLuong, trangThai, tinhTrang);
+            HoanTatLuu($"Đã nhập thêm {moi.Count} bản sao ({moi[0].MaBanSao} ... {moi[^1].MaBanSao}).",
+                () => ChonTheoMa(bookId));
         }
-        private void LamMoiBanSach()
+
+        private void CapNhatBanSao()
         {
-            copyId = 0; errorProvider.Clear(); txtCopyId.Clear(); cboCopyBook.SelectedIndex = -1;
-            cboCopyStatus.SelectedIndex = -1; txtCondition.Clear();
-            TrangThaiNut(btnCopyAdd, btnCopySave, btnCopyDelete, 0);
-            dgvCopies.ClearSelection(); cboCopyBook.Focus();
+            if (copyId == 0) { HienThongBao("Hãy chọn một bản sao trong danh sách.", true); return; }
+            var cu = copyBLL.TimTheoMa(copyId) ?? throw new ValidationException("Không tìm thấy bản sao cần sửa.");
+            string trangThai = cboCopyStatus.Text.Trim();
+            string tinhTrang = txtCopyCondition.Text.Trim();
+            if (cu.Status == trangThai && cu.Condition == tinhTrang) { ThongBaoChuaDoi(); return; }
+            if (!XacNhan($"Bạn có muốn cập nhật bản sao {cu.MaBanSao}?")) return;
+            copyBLL.Sua(new BookCopy { BookCopyId = copyId, Status = trangThai, Condition = tinhTrang });
+            HoanTatLuu($"Đã cập nhật bản sao {cu.MaBanSao}.", () => ChonTheoMa(bookId));
         }
-        private void ThemBanSach()
+
+        private void XoaBanSao()
         {
-            var copy = DocBanSach(); if (!KiemTraBanSach(copy)) return;
-            copyBLL.Them(copy);
-            HoanTatLuu("Đã thêm bản sách.", () => { LamMoiBanSach(); DienBanSach(copy); });
-        }
-        private void SuaBanSach()
-        {
-            var cu = copyBLL.TimTheoMa(copyId) ?? throw new ValidationException("Không tìm thấy bản sách cần sửa.");
-            var moi = DocBanSach(); if (!KiemTraBanSach(moi)) return;
-            if (cu.BookId == moi.BookId && cu.Status == moi.Status && cu.Condition == moi.Condition)
-            { ThongBaoChuaDoi(); return; }
-            if (!XacNhan($"Bạn có muốn sửa bản sách {copyId}?")) return;
-            copyBLL.Sua(moi);
-            HoanTatLuu("Đã sửa bản sách.", () => DienBanSach(moi));
-        }
-        private void XoaBanSach()
-        {
-            if (!XacNhan($"Bạn có chắc muốn xóa bản sách {copyId}?")) return;
+            if (copyId == 0) { HienThongBao("Hãy chọn một bản sao trong danh sách.", true); return; }
+            var cu = copyBLL.TimTheoMa(copyId) ?? throw new ValidationException("Không tìm thấy bản sao cần xóa.");
+            if (!XacNhan($"Bạn có chắc muốn xóa bản sao {cu.MaBanSao}?")) return;
             copyBLL.Xoa(copyId);
-            HoanTatLuu("Đã xóa bản sách.", LamMoiBanSach);
+            HoanTatLuu($"Đã xóa bản sao {cu.MaBanSao}.", () => ChonTheoMa(bookId));
+        }
+
+        // ---------- Dùng chung ----------
+
+        // ComboBox dạng DropDownList chỉ chọn được giá trị có sẵn; thêm vào danh sách nếu DB có trạng thái khác.
+        private void ChonTrangThai(string trangThai)
+        {
+            if (!cboCopyStatus.Items.Contains(trangThai)) cboCopyStatus.Items.Add(trangThai);
+            cboCopyStatus.SelectedItem = trangThai;
+        }
+
+        private void CapNhatTrangThaiNut()
+        {
+            btnBookAdd.Enabled = bookId == 0;
+            btnBookSave.Enabled = btnBookDelete.Enabled = bookId > 0;
+            btnNhapBoSung.Enabled = btnCopyAdd.Enabled = bookId > 0;
+            btnCopySave.Enabled = btnCopyDelete.Enabled = copyId > 0;
         }
 
         private bool KiemTraNhap(object doiTuong, Dictionary<string, Control> oNhap)
@@ -348,13 +359,10 @@ namespace QLTVApp
             return loi.Count == 0;
         }
 
-        private static void TrangThaiNut(Button them, Button sua, Button xoa, int id)
-        { them.Enabled = id == 0; sua.Enabled = xoa.Enabled = id > 0; }
-
         private void HoanTatLuu(string thongBao, Action dienLai)
         {
             // Lệnh ghi đã thành công. Nếu tải lại lỗi thì không báo nhầm là ghi thất bại.
-            try { TaiLaiDuLieu(); dienLai(); }
+            try { TaiDanhMuc(); HienThiSach(); dienLai(); }
             catch (Exception ex)
             {
                 HienThongBao(thongBao + "\nChưa tải lại được giao diện. " + DataHelper.LayThongBaoLoi(ex), true);
