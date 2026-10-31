@@ -13,4 +13,11 @@ public class Category
 
     // Một danh mục có nhiều đầu sách.
     public ICollection<Book> Books { get; set; } = new List<Book>();
+
+    public List<ValidationResult> IsInValid()
+    {
+        var loi = new List<ValidationResult>();
+        Validator.TryValidateObject(this, new ValidationContext(this), loi, true);
+        return loi;
+    }
 }

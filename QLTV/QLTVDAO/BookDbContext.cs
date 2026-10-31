@@ -35,7 +35,7 @@ public class BookDbContext : DbContext
             book.ToTable("Books", table =>
             {
                 table.HasCheckConstraint("CK_Books_Price", "Price >= 0 AND Price <= 999999999");
-                table.HasCheckConstraint("CK_Books_TotalCopies", "TotalCopies BETWEEN 1 AND 100000");
+                table.HasCheckConstraint("CK_Books_TotalCopies", "TotalCopies BETWEEN 0 AND 100000");
                 table.HasCheckConstraint("CK_Books_Year", "PublicationYear BETWEEN 1000 AND 9999");
             });
             book.Property(x => x.Price).HasPrecision(18, 2);

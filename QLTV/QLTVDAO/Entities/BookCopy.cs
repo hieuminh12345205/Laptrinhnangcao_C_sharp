@@ -18,4 +18,11 @@ public class BookCopy
     [Range(1, int.MaxValue, ErrorMessage = "Hãy chọn đầu sách.")]
     public int BookId { get; set; }
     public Book Book { get; set; } = null!;
+
+    public List<ValidationResult> IsInValid()
+    {
+        var loi = new List<ValidationResult>();
+        Validator.TryValidateObject(this, new ValidationContext(this), loi, true);
+        return loi;
+    }
 }

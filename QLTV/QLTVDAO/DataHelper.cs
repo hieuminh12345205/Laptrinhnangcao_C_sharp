@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MySql.Data.MySqlClient;
@@ -36,7 +37,10 @@ public static class DataHelper
     // Nơi gọi (View/Console) dùng hàm này; không hiển thị lỗi kỹ thuật gốc có thể chứa bí mật.
     public static string LayThongBaoLoi(Exception ex)
     {
-        if (ex is DbUpdateException && ex.InnerException != null) ex = ex.InnerException;
+        // DAL bọc lỗi trong DataException; EF Core có thể bọc tiếp lỗi MySQL.
+        // Tìm nguyên nhân gốc để vẫn phân biệt lỗi khóa ngoại, trùng mã, kết nối...
+        while ((ex is DataException or DbUpdateException) && ex.InnerException != null)
+            ex = ex.InnerException;
         return ex switch
         {
             System.ComponentModel.DataAnnotations.ValidationException => ex.Message,
@@ -44,6 +48,7 @@ public static class DataHelper
             MySqlException { Number: 1452 } => "Danh mục hoặc đầu sách được chọn không còn tồn tại.",
             MySqlException { Number: 1062 } => "Dữ liệu đã tồn tại.",
             MySqlException { Number: 1045 } => "Sai tài khoản/mật khẩu hoặc chưa được cấp quyền MySQL.",
+            MySqlException { Number: 1213 or 1205 } => "Dữ liệu đang được xử lý đồng thời. Hãy thử lại thao tác.",
             MySqlException => "Không thực hiện được thao tác MySQL. Hãy kiểm tra kết nối và database QLTV.",
             InvalidOperationException or IOException or UnauthorizedAccessException => "Kiểm tra mysql.local.json và quyền truy cập file.",
             _ => "Thao tác không thành công. Hãy kiểm tra lại dữ liệu."

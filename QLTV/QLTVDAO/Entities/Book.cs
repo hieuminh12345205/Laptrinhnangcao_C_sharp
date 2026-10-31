@@ -17,8 +17,8 @@ public class Book : IValidatableObject
     [Range(typeof(decimal), "0", "999999999", ErrorMessage = "Giá sách phải từ 0 đến 999999999.")]
     public decimal Price { get; set; }
 
-    // Số bản khai báo của đầu sách; BookCopy ghi chi tiết từng bản đã đăng ký.
-    [Range(1, 100000, ErrorMessage = "Tổng số bản phải từ 1 đến 100000.")]
+    // Nhập số lượng khi thêm mới; sau đó DAO cập nhật theo số BookCopy thực tế.
+    [Range(0, 100000, ErrorMessage = "Tổng số bản phải từ 0 đến 100000.")]
     public int TotalCopies { get; set; }
 
     [StringLength(100)]
@@ -32,6 +32,14 @@ public class Book : IValidatableObject
 
     // Một đầu sách có nhiều bản sách vật lý.
     public ICollection<BookCopy> BookCopies { get; set; } = new List<BookCopy>();
+
+    // Giống IsInValid trong bài tham khảo; hợp lệ trả danh sách rỗng thay vì null.
+    public List<ValidationResult> IsInValid()
+    {
+        var loi = new List<ValidationResult>();
+        Validator.TryValidateObject(this, new ValidationContext(this), loi, true);
+        return loi;
+    }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

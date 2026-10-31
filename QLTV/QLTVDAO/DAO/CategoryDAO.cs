@@ -11,10 +11,13 @@ public class CategoryDAO
     public CategoryDAO(Func<BookDbContext>? taoContext = null)
         => this.taoContext = taoContext ?? (() => new BookDbContext());
 
-    public List<Category> LayDanhSach()
+    public List<Category> LayDanhSach(string tuKhoa = "")
     {
         using var db = taoContext();
-        return db.Categories.AsNoTracking().OrderBy(x => x.CategoryId).ToList();
+        var query = db.Categories.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(tuKhoa))
+            query = query.Where(x => x.Description.Contains(tuKhoa));
+        return query.OrderBy(x => x.CategoryId).ToList();
     }
     public Category? TimTheoMa(int id)
     {
@@ -30,8 +33,11 @@ public class CategoryDAO
     {
         using var db = taoContext();
         var moi = new Category { Description = category.Description };
-        db.Categories.Add(moi);
-        db.SaveChanges();
+        DatabaseTransaction.ThucHien(db, () =>
+        {
+            db.Categories.Add(moi);
+            db.SaveChanges();
+        });
         category.CategoryId = moi.CategoryId; // Nhận mã tự tăng từ MySQL.
     }
     public void Sua(Category category)
@@ -39,15 +45,21 @@ public class CategoryDAO
         using var db = taoContext();
         var cu = db.Categories.Find(category.CategoryId)
             ?? throw new ValidationException("Không tìm thấy danh mục cần sửa.");
-        cu.Description = category.Description;
-        db.SaveChanges();
+        DatabaseTransaction.ThucHien(db, () =>
+        {
+            cu.Description = category.Description;
+            db.SaveChanges();
+        });
     }
     public void Xoa(int id)
     {
         using var db = taoContext();
         var cu = db.Categories.Find(id)
             ?? throw new ValidationException("Không tìm thấy danh mục cần xóa.");
-        db.Categories.Remove(cu);
-        db.SaveChanges();
+        DatabaseTransaction.ThucHien(db, () =>
+        {
+            db.Categories.Remove(cu);
+            db.SaveChanges();
+        });
     }
 }
