@@ -98,9 +98,10 @@ public class DataHelper
         // using tự đóng kết nối, kể cả khi câu SQL gặp lỗi.
     }
 
-    private static string LayChuoiKetNoi()
+    // Dùng chung cấu hình riêng của máy cho ADO.NET và EF Core.
+    public static string LayChuoiKetNoi(string? thuMucCauHinh = null)
     {
-        string duongDan = Path.Combine(AppContext.BaseDirectory, "mysql.local.json");
+        string duongDan = Path.Combine(thuMucCauHinh ?? AppContext.BaseDirectory, "mysql.local.json");
         if (!File.Exists(duongDan))
             throw new InvalidOperationException("Chưa có mysql.local.json. Hãy sao chép mysql.example.json thành mysql.local.json và nhập thông tin kết nối.");
 

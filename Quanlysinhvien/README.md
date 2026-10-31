@@ -62,3 +62,11 @@ vi phạm nghiệp vụ; lỗi kỹ thuật từ DAO/DAL tự truyền qua BLL. 
 và Exception để hiển thị thông báo; không đưa mật khẩu/câu SQL vào thông báo lỗi kỹ thuật.
 Đã cập nhật cách gọi trên form, giữ xác nhận Sửa/Xóa và kiểm tra chưa thay đổi thông tin.
 Bộ kiểm tra mới nhất: 59 kiểm tra MySQL/SQLi đã qua; build 0 lỗi, 0 cảnh báo.
+
+## EF Core — 24.10.2026
+
+Đã bổ sung `QuanLySinhVienDbContext` để ánh xạ `LopHoc` và `SinhVien` sang hai bảng MySQL hiện có,
+cùng factory cho công cụ Migration. Kết nối dùng chung `mysql.local.json`; mật khẩu không đưa vào mã nguồn.
+EF Core và MySQL provider dùng bản 10.0.9 phù hợp với .NET 10 và MySql.Data 26.7.0.
+Đã qua 32 kiểm tra mapping/kết nối chỉ đọc; CRUD trên form tiếp tục dùng ADO.NET.
+Xem [hướng dẫn EF Core](HUONG_DAN_EF_CORE.md) để kiểm tra bằng Get-DbContext và chuẩn bị bước Migration.

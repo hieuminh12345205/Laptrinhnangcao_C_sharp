@@ -74,6 +74,11 @@ Xem [hướng dẫn chi tiết](Quanlysinhvien/HUONG_DAN.md) để tìm hiểu c
 
 ## Các bài thực hành trước
 
+Bài **24.10.2026**: [QLTV — Quản lý thư viện](QLTV/) gồm **QLTVApp (WinForms)** và
+**QLTVDAO (Class Library)**, dùng EF Core/MySQL, ba entity Category/Book/BookCopy,
+phân tầng BLL/DAL/DAO và Code First Migration.
+Mở `QLTV/QLTV.slnx`, chọn QLTVApp làm Startup Project rồi F5 để chạy giao diện.
+
 | Bài | Ngày làm | Nội dung |
 | --- | --- | --- |
 | [Bài 1](Bai_1/) | 12.09.2026 | Nhập ba số nguyên, kiểm tra dữ liệu nhập và tính tổng. |
