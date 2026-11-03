@@ -72,7 +72,7 @@ Có thể dùng MySQL Workbench để chạy các script SQL.
 
 Xem [hướng dẫn chi tiết](Quanlysinhvien/HUONG_DAN.md) để tìm hiểu cách sử dụng và đối chiếu code với bài giảng.
 
-## Các bài thực hành trước
+## Các bài thực hành liên quan
 
 Bài **24.10.2026**: [QLTV — Quản lý thư viện](QLTV/) gồm **QLTVApp (WinForms)** và
 **QLTVDAO (Class Library)**, dùng EF Core/MySQL, ba entity Category/Book/BookCopy,
